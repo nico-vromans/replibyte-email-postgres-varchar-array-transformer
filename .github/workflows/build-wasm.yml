@@ -1,0 +1,66 @@
+name: Build email varchar array transformer WASM
+
+on:
+  push:
+    # Trigger on tags that look like versions
+    tags:
+      - 'v*.*.*'
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install latest Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          default: true
+          override: true
+
+      - name: Add WASM target
+        run: rustup target add wasm32-wasip1
+
+      - name: Build
+        run: cargo build --release --target wasm32-wasip1
+
+      - name: Rename WASM file
+        run: |
+          mkdir -p release
+          cp target/wasm32-wasip1/release/*.wasm release/email-varchar-array-transformer.wasm
+
+      - name: Upload WASM as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: email-varchar-array-transformer
+          path: release/email-varchar-array-transformer.wasm
+
+      - name: Get release version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/email-varchar-array-transformer.wasm
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          name: Release ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
